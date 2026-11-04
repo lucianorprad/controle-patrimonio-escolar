@@ -2,8 +2,9 @@
   "/_allauth": { "target": "http://backend:8000", "secure": false, "changeOrigin": true },
   "/users": { "target": "http://backend:8000", "secure": false, "changeOrigin": true },
   "/groups": { "target": "http://backend:8000", "secure": false, "changeOrigin": true },
-  "/bens_moveis": { "target": "http://backend:8000", "secure": false, "changeOrigin": true },
-  "/bens_imoveis": { "target": "http://backend:8000", "secure": false, "changeOrigin": true },
-  "/bens_semoventes": { "target": "http://backend:8000", "secure": false, "changeOrigin": true },
-  "/bens_imateriais": { "target": "http://backend:8000", "secure": false, "changeOrigin": true }
+  "/bens": { "target": "http://backend:8000", "secure": false, "changeOrigin": true },
+  "/tipos_bem": { "target": "http://backend:8000", "secure": false, "changeOrigin": true },
+  "/setores": { "target": "http://backend:8000", "secure": false, "changeOrigin": true },
+  "/localizacoes": { "target": "http://backend:8000", "secure": false, "changeOrigin": true },
+  "/movimentacoes": { "target": "http://backend:8000", "secure": false, "changeOrigin": true }
 }

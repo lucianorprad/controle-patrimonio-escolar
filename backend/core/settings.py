@@ -23,7 +23,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = bool(os.environ.get('DJANGO_DEBUG', 'False') == 'True')
+DEBUG = os.environ.get("DEBUG", os.environ.get("DJANGO_DEBUG", "0")).lower() in {
+    "1",
+    "true",
+    "yes",
+}
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'backend']
 CSRF_TRUSTED_ORIGINS = [
@@ -85,7 +89,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'core.wsgi.application'
 
-# Keep inventory primary keys auto-incrementing in PostgreSQL.
+# Keep inventory primary keys consistent with the models.
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
@@ -94,16 +98,15 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("POSTGRES_DB"),
-        "USER": os.environ.get("POSTGRES_USER"),
-        "PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
-        "HOST": os.environ.get("POSTGRES_HOST"),
-        "PORT": os.environ.get("POSTGRES_PORT"),
-        # "OPTIONS": {
-        #     "service": "my_service",
-        #     "passfile": ".my_pgpass",
-        # },
+        "ENGINE": "django.db.backends.mysql",
+        "NAME": os.environ["MYSQL_DATABASE"],
+        "USER": os.environ["MYSQL_USER"],
+        "PASSWORD": os.environ["MYSQL_PASSWORD"],
+        "HOST": os.environ.get("MYSQL_HOST", "db"),
+        "PORT": os.environ.get("MYSQL_PORT", "3306"),
+        "OPTIONS": {
+            "charset": "utf8mb4",
+        },
     }
 }
 

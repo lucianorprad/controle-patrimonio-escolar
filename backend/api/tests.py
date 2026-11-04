@@ -1,134 +1,94 @@
 import json
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Permission
 from django.test import Client, TestCase
 from rest_framework.test import APITestCase
 
-from api.models import BensImateriais, BensImoveis, BensMoveis, BensSemoventes
+from .models import Bem, Localizacao, Movimentacao, Setor, TipoBem
 
 
-class InventoryApiTests(APITestCase):
+class PatrimonioApiTests(APITestCase):
     def setUp(self):
-        self.admin = get_user_model().objects.create_superuser(
+        self.user = get_user_model().objects.create_superuser(
             username="admin",
             email="admin@example.com",
             password="test-password",
         )
-        self.client.force_authenticate(user=self.admin)
+        self.client.force_authenticate(user=self.user)
+        self.tipo_bem = TipoBem.objects.create(nome="Equipamento")
+        self.setor = Setor.objects.create(nome="Informática")
 
-    def test_create_generates_ids_for_every_inventory_type(self):
-        cases = [
-            (
-                "/bens_moveis/",
-                {
-                    "numeroPatrimonio": "PAT-1000",
-                    "descricao": "Notebook",
-                    "localizacao": "Sala 1",
-                    "estado": "bom",
-                    "responsavel": "Coordenação",
-                },
-            ),
-            (
-                "/bens_imoveis/",
-                {
-                    "numeroPatrimonio": "PAT-2000",
-                    "descricao": "Prédio principal",
-                    "localizacao": "Unidade central",
-                    "estado": "bom",
-                    "responsavel": "Direção",
-                },
-            ),
-            (
-                "/bens_semoventes/",
-                {
-                    "numeroPatrimonio": "PAT-3000",
-                    "descricao": "Animal de apoio",
-                    "dataNascimento": "2020-05-10",
-                    "estado": "bom",
-                    "responsavel": "Zeladoria",
-                },
-            ),
-            (
-                "/bens_imateriais/",
-                {
-                    "numeroPatrimonio": "PAT-4000",
-                    "descricao": "Acervo histórico",
-                    "dataOrigem": "2020-05-10",
-                    "autor": "Comunidade escolar",
-                    "responsavel": "Direção",
-                },
-            ),
-        ]
-
-        for endpoint, payload in cases:
-            with self.subTest(endpoint=endpoint):
-                response = self.client.post(endpoint, payload, format="json")
-                self.assertEqual(response.status_code, 201)
-                self.assertGreater(response.data["id"], 0)
-                self.assertEqual(
-                    response.data["numeroPatrimonio"], payload["numeroPatrimonio"]
-                )
-
-    def test_update_and_delete_use_frontend_item_url(self):
-        item = BensMoveis.objects.create(
-            numeroPatrimonio="PAT-1001",
-            descricao="Notebook antigo",
-            localizacao="Sala 1",
-            estado="regular",
-            responsavel="Coordenação",
+    def test_create_bem_uses_diagram_fields(self):
+        response = self.client.post(
+            "/bens/",
+            {
+                "codigo_patrimonio": "PAT-1000",
+                "descricao": "Notebook",
+                "estado_conservacao": "Bom",
+                "situacao": "Ativo",
+                "setor": self.setor.pk,
+                "tipo_bem": self.tipo_bem.pk,
+            },
+            format="json",
         )
 
-        response = self.client.put(
-            f"/bens_moveis/{item.pk}/",
-            {
-                "numeroPatrimonio": "PAT-1001",
-                "descricao": "Notebook atualizado",
-                "localizacao": "Sala 2",
-                "estado": "bom",
-                "responsavel": "Coordenação",
-            },
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["codigo_patrimonio"], "PAT-1000")
+        self.assertEqual(response.data["setor_nome"], "Informática")
+        self.assertEqual(response.data["tipo_bem_nome"], "Equipamento")
+        self.assertTrue(Bem.objects.filter(codigo_patrimonio="PAT-1000").exists())
+
+    def test_update_and_delete_bem(self):
+        bem = Bem.objects.create(
+            codigo_patrimonio="PAT-1001",
+            descricao="Notebook antigo",
+            estado_conservacao=Bem.EstadoConservacao.REGULAR,
+            situacao=Bem.Situacao.ATIVO,
+            setor=self.setor,
+            tipo_bem=self.tipo_bem,
+        )
+        response = self.client.patch(
+            f"/bens/{bem.pk}/",
+            {"descricao": "Notebook atualizado"},
             format="json",
         )
 
         self.assertEqual(response.status_code, 200)
-        item.refresh_from_db()
-        self.assertEqual(item.descricao, "Notebook atualizado")
-        self.assertEqual(item.localizacao, "Sala 2")
+        bem.refresh_from_db()
+        self.assertEqual(bem.descricao, "Notebook atualizado")
 
-        response = self.client.delete(f"/bens_moveis/{item.pk}/")
+        response = self.client.delete(f"/bens/{bem.pk}/")
 
         self.assertEqual(response.status_code, 204)
-        self.assertFalse(BensMoveis.objects.filter(pk=item.pk).exists())
+        self.assertFalse(Bem.objects.filter(pk=bem.pk).exists())
 
-    def test_model_permissions_allow_assigned_inventory_user(self):
-        user = get_user_model().objects.create_user(
-            username="operador",
-            email="operador@example.com",
-            password="test-password",
+    def test_movement_uses_diagram_relations(self):
+        bem = Bem.objects.create(
+            codigo_patrimonio="PAT-1002",
+            descricao="Projetor",
+            estado_conservacao=Bem.EstadoConservacao.BOM,
+            situacao=Bem.Situacao.ATIVO,
+            setor=self.setor,
+            tipo_bem=self.tipo_bem,
         )
-        permissions = Permission.objects.filter(
-            content_type__app_label="api",
-            codename__in=["view_bensmoveis", "add_bensmoveis"],
-        )
-        user.user_permissions.add(*permissions)
-        self.client.force_authenticate(user=user)
-
-        list_response = self.client.get("/bens_moveis/")
-        create_response = self.client.post(
-            "/bens_moveis/",
+        origem = Localizacao.objects.create(nome="Sala 1")
+        destino = Localizacao.objects.create(nome="Sala 2")
+        response = self.client.post(
+            "/movimentacoes/",
             {
-                "numeroPatrimonio": "PAT-1002",
-                "descricao": "Projetor",
-                "localizacao": "Sala 2",
-                "estado": "bom",
-                "responsavel": "Coordenação",
+                "data_movimentacao": "2026-11-02T18:00:00Z",
+                "setor": self.setor.pk,
+                "localizacao_origem": origem.pk,
+                "localizacao_destino": destino.pk,
+                "bem": bem.pk,
             },
             format="json",
         )
 
-        self.assertEqual(list_response.status_code, 200)
-        self.assertEqual(create_response.status_code, 201)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["localizacao_origem_nome"], "Sala 1")
+        self.assertEqual(response.data["localizacao_destino_nome"], "Sala 2")
+        self.assertTrue(Movimentacao.objects.filter(bem=bem).exists())
 
     def test_regular_user_cannot_write_inventory_or_manage_users(self):
         user = get_user_model().objects.create_user(
@@ -139,13 +99,14 @@ class InventoryApiTests(APITestCase):
         self.client.force_authenticate(user=user)
 
         inventory_response = self.client.post(
-            "/bens_moveis/",
+            "/bens/",
             {
-                "numeroPatrimonio": "PAT-1003",
+                "codigo_patrimonio": "PAT-1003",
                 "descricao": "Projetor",
-                "localizacao": "Sala 2",
-                "estado": "bom",
-                "responsavel": "Coordenação",
+                "estado_conservacao": "Bom",
+                "situacao": "Ativo",
+                "setor": self.setor.pk,
+                "tipo_bem": self.tipo_bem.pk,
             },
             format="json",
         )
@@ -155,6 +116,7 @@ class InventoryApiTests(APITestCase):
         self.assertEqual(inventory_response.status_code, 403)
         self.assertEqual(users_response.status_code, 403)
         self.assertEqual(groups_response.status_code, 403)
+
 
 class AllauthBrowserLoginTests(TestCase):
     def test_browser_login_session_and_logout(self):
@@ -171,9 +133,7 @@ class AllauthBrowserLoginTests(TestCase):
 
         login_response = client.post(
             "/_allauth/browser/v1/auth/login",
-            data=json.dumps(
-                {"username": "login-user", "password": "test-password"}
-            ),
+            data=json.dumps({"username": "login-user", "password": "test-password"}),
             content_type="application/json",
             HTTP_X_CSRFTOKEN=client.cookies["csrftoken"].value,
         )

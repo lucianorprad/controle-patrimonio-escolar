@@ -2,68 +2,77 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
-export type AssetKind = 'moveis' | 'imoveis' | 'semoventes' | 'imateriais';
+export interface CatalogItem {
+  id: number;
+  nome: string;
+  descricao: string | null;
+}
 
 export interface InventoryItem {
   id: number;
-  numeroPatrimonio: string;
+  codigo_patrimonio: string;
   descricao: string;
-  responsavel: string;
-  localizacao?: string;
-  estado?: string;
-  dataNascimento?: string;
-  dataOrigem?: string;
-  autor?: string;
+  estado_conservacao: string;
+  situacao: string;
+  data_aquisicao: string | null;
+  valor: string | null;
+  setor: number;
+  setor_nome: string;
+  tipo_bem: number;
+  tipo_bem_nome: string;
 }
 
 export interface InventoryPayload {
-  numeroPatrimonio: string;
+  codigo_patrimonio: string;
   descricao: string;
-  responsavel: string;
-  localizacao?: string;
-  estado?: string;
-  dataNascimento?: string;
-  dataOrigem?: string;
-  autor?: string;
+  estado_conservacao: string;
+  situacao: string;
+  data_aquisicao: string | null;
+  valor: string | null;
+  setor: number;
+  tipo_bem: number;
 }
 
-const ENDPOINTS: Record<AssetKind, string> = {
-  moveis: '/bens_moveis/',
-  imoveis: '/bens_imoveis/',
-  semoventes: '/bens_semoventes/',
-  imateriais: '/bens_imateriais/',
-};
+type ListResponse<T> = T[] | { results: T[] };
+
+function unwrapList<T>(response: ListResponse<T>): T[] {
+  return Array.isArray(response) ? response : response.results;
+}
 
 @Injectable({ providedIn: 'root' })
 export class InventoryService {
   private readonly http = inject(HttpClient);
 
-  async list(kind: AssetKind): Promise<InventoryItem[]> {
+  async list(): Promise<InventoryItem[]> {
     const response = await firstValueFrom(
-      this.http.get<InventoryItem[] | { results: InventoryItem[] }>(ENDPOINTS[kind]),
+      this.http.get<ListResponse<InventoryItem>>('/bens/'),
     );
-    return Array.isArray(response) ? response : response.results;
+    return unwrapList(response);
   }
 
-  async create(kind: AssetKind, payload: InventoryPayload): Promise<InventoryItem> {
-    return firstValueFrom(
-      this.http.post<InventoryItem>(ENDPOINTS[kind], payload),
+  async listTiposBem(): Promise<CatalogItem[]> {
+    const response = await firstValueFrom(
+      this.http.get<ListResponse<CatalogItem>>('/tipos_bem/'),
     );
+    return unwrapList(response);
   }
 
-  async update(
-    kind: AssetKind,
-    id: number,
-    payload: InventoryPayload,
-  ): Promise<InventoryItem> {
-    return firstValueFrom(
-      this.http.put<InventoryItem>(`${ENDPOINTS[kind]}${id}/`, payload),
+  async listSetores(): Promise<CatalogItem[]> {
+    const response = await firstValueFrom(
+      this.http.get<ListResponse<CatalogItem>>('/setores/'),
     );
+    return unwrapList(response);
   }
 
-  async delete(kind: AssetKind, id: number): Promise<void> {
-    await firstValueFrom(
-      this.http.delete<void>(`${ENDPOINTS[kind]}${id}/`),
-    );
+  async create(payload: InventoryPayload): Promise<InventoryItem> {
+    return firstValueFrom(this.http.post<InventoryItem>('/bens/', payload));
+  }
+
+  async update(id: number, payload: InventoryPayload): Promise<InventoryItem> {
+    return firstValueFrom(this.http.put<InventoryItem>(`/bens/${id}/`, payload));
+  }
+
+  async delete(id: number): Promise<void> {
+    await firstValueFrom(this.http.delete<void>(`/bens/${id}/`));
   }
 }

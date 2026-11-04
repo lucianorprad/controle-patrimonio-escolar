@@ -30,46 +30,46 @@
         </div>
       </div>
 
-      <label for="asset-kind">Tipo de bem</label>
-      <select id="asset-kind" name="formKind" [(ngModel)]="formKind" (ngModelChange)="changeFormKind()">
-        <option *ngFor="let option of kinds" [ngValue]="option.value">{{ option.label }}</option>
+      <label for="asset-type">Tipo de bem</label>
+      <select id="asset-type" name="tipo_bem" [(ngModel)]="form.tipo_bem" required>
+        <option [ngValue]="null" disabled>Selecione um tipo</option>
+        <option *ngFor="let tipo of tiposBem" [ngValue]="tipo.id">{{ tipo.nome }}</option>
       </select>
 
-      <label for="asset-number">Número patrimonial</label>
-      <input id="asset-number" name="numeroPatrimonio" [(ngModel)]="form.numeroPatrimonio" required maxlength="50" autocomplete="off" />
+      <label for="asset-sector">Setor</label>
+      <select id="asset-sector" name="setor" [(ngModel)]="form.setor" required>
+        <option [ngValue]="null" disabled>Selecione um setor</option>
+        <option *ngFor="let setor of setores" [ngValue]="setor.id">{{ setor.nome }}</option>
+      </select>
+
+      <p class="empty-state" *ngIf="!isLoadingCatalogs && (!tiposBem.length || !setores.length)">
+        Cadastre tipos de bem e setores na área administrativa antes de incluir patrimônios.
+      </p>
+
+      <label for="asset-code">Código patrimonial</label>
+      <input id="asset-code" name="codigo_patrimonio" [(ngModel)]="form.codigo_patrimonio" required maxlength="50" autocomplete="off" />
 
       <label for="asset-description">Descrição</label>
-      <textarea id="asset-description" name="descricao" [(ngModel)]="form.descricao" required rows="3"></textarea>
+      <textarea id="asset-description" name="descricao" [(ngModel)]="form.descricao" required maxlength="255" rows="3"></textarea>
 
-      <label for="asset-owner">Responsável</label>
-      <input id="asset-owner" name="responsavel" [(ngModel)]="form.responsavel" required maxlength="30" />
+      <label for="asset-condition">Estado de conservação</label>
+      <select id="asset-condition" name="estado_conservacao" [(ngModel)]="form.estado_conservacao" required>
+        <option *ngFor="let estado of estadosConservacao" [ngValue]="estado">{{ estado }}</option>
+      </select>
 
-      <ng-container *ngIf="usesLocationAndCondition">
-        <label for="asset-location">Localização</label>
-        <input id="asset-location" name="localizacao" [(ngModel)]="form.localizacao" required maxlength="20" />
+      <label for="asset-situation">Situação</label>
+      <select id="asset-situation" name="situacao" [(ngModel)]="form.situacao" required>
+        <option *ngFor="let situacao of situacoes" [ngValue]="situacao">{{ situacao }}</option>
+      </select>
 
-        <label for="asset-condition">Estado de conservação</label>
-        <input id="asset-condition" name="estado" [(ngModel)]="form.estado" required maxlength="10" />
-      </ng-container>
+      <label for="asset-date">Data de aquisição</label>
+      <input id="asset-date" name="data_aquisicao" type="date" [(ngModel)]="form.data_aquisicao" />
 
-      <ng-container *ngIf="usesBirthDate">
-        <label for="asset-birth-date">Data de nascimento</label>
-        <input id="asset-birth-date" name="dataNascimento" type="date" [(ngModel)]="form.dataNascimento" required />
-
-        <label for="asset-animal-condition">Estado de conservação</label>
-        <input id="asset-animal-condition" name="estado" [(ngModel)]="form.estado" required maxlength="10" />
-      </ng-container>
-
-      <ng-container *ngIf="usesOriginAndAuthor">
-        <label for="asset-origin-date">Data de origem</label>
-        <input id="asset-origin-date" name="dataOrigem" type="date" [(ngModel)]="form.dataOrigem" required />
-
-        <label for="asset-author">Autor</label>
-        <input id="asset-author" name="autor" [(ngModel)]="form.autor" required maxlength="30" />
-      </ng-container>
+      <label for="asset-value">Valor</label>
+      <input id="asset-value" name="valor" type="number" min="0" step="0.01" [(ngModel)]="form.valor" />
 
       <div class="form-actions">
-        <button class="primary-button" type="submit" [disabled]="assetForm.invalid || isSaving">
+        <button class="primary-button" type="submit" [disabled]="assetForm.invalid || isSaving || isLoadingCatalogs || !tiposBem.length || !setores.length">
           {{ isSaving ? 'Salvando...' : editingId === null ? 'Cadastrar bem' : 'Salvar alterações' }}
         </button>
         <button *ngIf="editingId !== null" class="secondary-button" type="button" (click)="cancelEdit()">Cancelar</button>
@@ -85,9 +85,9 @@
         <div class="list-controls">
           <div class="filter-control">
             <label for="inventory-filter">Filtrar tipo</label>
-            <select id="inventory-filter" name="inventoryFilter" [(ngModel)]="listFilter" (ngModelChange)="changeListFilter()">
+            <select id="inventory-filter" name="inventoryFilter" [(ngModel)]="listFilter">
               <option [ngValue]="'all'">Todos os tipos</option>
-              <option *ngFor="let option of kinds" [ngValue]="option.value">{{ option.label }}</option>
+              <option *ngFor="let tipo of tiposBem" [ngValue]="tipo.id">{{ tipo.nome }}</option>
             </select>
           </div>
           <button class="secondary-button refresh-button" type="button" (click)="loadItems()" [disabled]="isLoading">
@@ -96,29 +96,31 @@
         </div>
       </div>
 
-      <p class="empty-state" *ngIf="!isLoading && items.length === 0">Nenhum bem cadastrado para este filtro.</p>
+      <p class="empty-state" *ngIf="!isLoading && visibleItems.length === 0">Nenhum bem cadastrado para este filtro.</p>
 
-      <div class="table-scroll" *ngIf="items.length > 0">
+      <div class="table-scroll" *ngIf="visibleItems.length > 0">
         <table>
           <thead>
             <tr>
-              <th>Tipo</th>
-              <th>Número</th>
+              <th>Código</th>
               <th>Descrição</th>
-              <th>Responsável</th>
-              <th>Detalhe</th>
-              <th>Estado / autor</th>
+              <th>Tipo</th>
+              <th>Setor</th>
+              <th>Conservação</th>
+              <th>Situação</th>
+              <th>Valor</th>
               <th><span class="visually-hidden">Ações</span></th>
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let item of items">
-              <td data-label="Tipo">{{ kindLabel(item.kind) }}</td>
-              <td data-label="Número">{{ item.numeroPatrimonio }}</td>
+            <tr *ngFor="let item of visibleItems">
+              <td data-label="Código">{{ item.codigo_patrimonio }}</td>
               <td data-label="Descrição">{{ item.descricao }}</td>
-              <td data-label="Responsável">{{ item.responsavel }}</td>
-              <td data-label="Detalhe">{{ itemDetail(item) }}</td>
-              <td data-label="Estado / autor">{{ itemStatus(item) }}</td>
+              <td data-label="Tipo">{{ item.tipo_bem_nome }}</td>
+              <td data-label="Setor">{{ item.setor_nome }}</td>
+              <td data-label="Conservação">{{ item.estado_conservacao }}</td>
+              <td data-label="Situação">{{ item.situacao }}</td>
+              <td data-label="Valor">{{ item.valor === null ? '—' : (item.valor | currency:'BRL':'symbol':'1.2-2':'pt-BR') }}</td>
               <td class="row-actions">
                 <button class="text-button" type="button" (click)="edit(item)">Editar</button>
                 <button class="text-button danger" type="button" (click)="remove(item)">Excluir</button>
@@ -130,20 +132,3 @@
     </section>
   </section>
 </main>
-
-<!-- Campo de Pesquisa e Filtro de Património -->
-<div class="mb-4 row">
-  <div class="col-md-8">
-    <div class="input-group">
-      <input 
-        type="text" 
-        class="form-control" 
-        placeholder="Pesquisar património por nome, tombo ou localização..." 
-        aria-label="Pesquisar património">
-      <button class="btn btn-primary" type="button">
-        Buscar
-      </button>
-    </div>
-  </div>
-  
-</div>

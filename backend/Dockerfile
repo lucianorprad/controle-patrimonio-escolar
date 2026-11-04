@@ -11,6 +11,13 @@ ENV PYTHONDONTWRITEBYTECODE=1
 # Garante que a saída do console seja exibida imediatamente
 ENV PYTHONUNBUFFERED=1
 
+# Dependências necessárias para compilar o driver MySQL.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    default-libmysqlclient-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copia o código do projeto
 COPY . /app/
 

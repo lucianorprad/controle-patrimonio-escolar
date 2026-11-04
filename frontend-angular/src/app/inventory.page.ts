@@ -5,43 +5,34 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from './auth.service';
 import {
-  AssetKind,
+  CatalogItem,
   InventoryItem,
   InventoryPayload,
   InventoryService,
 } from './inventory.service';
 
-interface AssetKindOption {
-  value: AssetKind;
-  label: string;
-}
-
-type InventoryFilter = AssetKind | 'all';
-
-interface InventoryRow extends InventoryItem {
-  kind: AssetKind;
-}
+type InventoryFilter = number | 'all';
 
 interface InventoryForm {
-  numeroPatrimonio: string;
+  codigo_patrimonio: string;
   descricao: string;
-  responsavel: string;
-  localizacao: string;
-  estado: string;
-  dataNascimento: string;
-  dataOrigem: string;
-  autor: string;
+  estado_conservacao: string;
+  situacao: string;
+  data_aquisicao: string;
+  valor: number | null;
+  setor: number | null;
+  tipo_bem: number | null;
 }
 
 const EMPTY_FORM: InventoryForm = {
-  numeroPatrimonio: '',
+  codigo_patrimonio: '',
   descricao: '',
-  responsavel: '',
-  localizacao: '',
-  estado: '',
-  dataNascimento: '',
-  dataOrigem: '',
-  autor: '',
+  estado_conservacao: 'Bom',
+  situacao: 'Ativo',
+  data_aquisicao: '',
+  valor: null,
+  setor: null,
+  tipo_bem: null,
 };
 
 @Component({
@@ -57,84 +48,64 @@ export class InventoryPage implements OnInit {
   private readonly router = inject(Router);
   private listRequestId = 0;
 
-  readonly kinds: AssetKindOption[] = [
-    { value: 'moveis', label: 'Bens móveis' },
-    { value: 'imoveis', label: 'Bens imóveis' },
-    { value: 'semoventes', label: 'Bens semoventes' },
-    { value: 'imateriais', label: 'Bens imateriais' },
-  ];
+  readonly estadosConservacao = ['Ótimo', 'Bom', 'Regular', 'Ruim'];
+  readonly situacoes = ['Ativo', 'Baixado'];
 
-  formKind: AssetKind = 'moveis';
+  tiposBem: CatalogItem[] = [];
+  setores: CatalogItem[] = [];
   listFilter: InventoryFilter = 'all';
   form: InventoryForm = { ...EMPTY_FORM };
-  items: InventoryRow[] = [];
+  items: InventoryItem[] = [];
   editingId: number | null = null;
-  editingKind: AssetKind | null = null;
   isLoading = false;
+  isLoadingCatalogs = false;
   isSaving = false;
   isSigningOut = false;
   mensagem = '';
   isError = false;
 
   ngOnInit(): void {
+    void this.loadCatalogs();
     void this.loadItems();
   }
 
-  get listTitle(): string {
+  get visibleItems(): InventoryItem[] {
     return this.listFilter === 'all'
-      ? 'Todos os bens'
-      : this.kindLabel(this.listFilter);
+      ? this.items
+      : this.items.filter((item) => item.tipo_bem === this.listFilter);
   }
 
-  get usesLocationAndCondition(): boolean {
-    return this.formKind === 'moveis' || this.formKind === 'imoveis';
+  get listTitle(): string {
+    if (this.listFilter === 'all') {
+      return 'Todos os bens';
+    }
+    return this.tiposBem.find((tipo) => tipo.id === this.listFilter)?.nome ?? 'Inventário';
   }
 
-  get usesBirthDate(): boolean {
-    return this.formKind === 'semoventes';
-  }
-
-  get usesOriginAndAuthor(): boolean {
-    return this.formKind === 'imateriais';
+  async loadCatalogs(): Promise<void> {
+    this.isLoadingCatalogs = true;
+    try {
+      const [tiposBem, setores] = await Promise.all([
+        this.inventoryService.listTiposBem(),
+        this.inventoryService.listSetores(),
+      ]);
+      this.tiposBem = tiposBem;
+      this.setores = setores;
+    } catch (error) {
+      this.showError(error, 'Não foi possível carregar os tipos de bem e setores.');
+    } finally {
+      this.isLoadingCatalogs = false;
+    }
   }
 
   async loadItems(): Promise<void> {
     this.mensagem = '';
-    await this.refreshItems();
-  }
-
-  async changeListFilter(): Promise<void> {
-    this.mensagem = '';
-    await this.refreshItems();
-  }
-
-  changeFormKind(): void {
-    this.cancelEdit();
-  }
-
-  private async refreshItems(): Promise<void> {
     const requestId = ++this.listRequestId;
-    const filter = this.listFilter;
     this.isLoading = true;
-
     try {
-      if (filter === 'all') {
-        const groups = await Promise.all(
-          this.kinds.map(async ({ value }) => ({
-            kind: value,
-            items: await this.inventoryService.list(value),
-          })),
-        );
-        if (requestId === this.listRequestId) {
-          this.items = groups.flatMap(({ kind, items }) =>
-            items.map((item) => ({ ...item, kind })),
-          );
-        }
-      } else {
-        const items = await this.inventoryService.list(filter);
-        if (requestId === this.listRequestId) {
-          this.items = items.map((item) => ({ ...item, kind: filter }));
-        }
+      const items = await this.inventoryService.list();
+      if (requestId === this.listRequestId) {
+        this.items = items;
       }
     } catch (error) {
       if (requestId === this.listRequestId) {
@@ -148,67 +119,58 @@ export class InventoryPage implements OnInit {
   }
 
   async save(): Promise<void> {
+    if (this.form.setor === null || this.form.tipo_bem === null) {
+      this.mensagem = 'Cadastre e selecione um tipo de bem e um setor.';
+      this.isError = true;
+      return;
+    }
+
     this.isSaving = true;
     this.mensagem = '';
-    const payload = this.toPayload();
+    const payload = this.toPayload(this.form.setor, this.form.tipo_bem);
     try {
-      if (this.editingId === null || this.editingKind === null) {
-        const kind = this.formKind;
-        const created = await this.inventoryService.create(kind, payload);
-        this.listFilter = 'all';
-        this.items = [
-          ...this.items.filter(
-            (item) => item.kind !== kind || item.id !== created.id,
-          ),
-          { ...created, kind },
-        ];
+      if (this.editingId === null) {
+        await this.inventoryService.create(payload);
         this.mensagem = 'Patrimônio cadastrado.';
       } else {
-        const kind = this.editingKind;
-        const id = this.editingId;
-        const updated = await this.inventoryService.update(kind, id, payload);
-        this.items = this.items.map((item) =>
-          item.kind === kind && item.id === id ? { ...updated, kind } : item,
-        );
+        await this.inventoryService.update(this.editingId, payload);
         this.mensagem = 'Patrimônio atualizado.';
       }
       this.isError = false;
       this.cancelEdit();
-      void this.refreshItems();
+      await this.loadItems();
     } catch (error) {
       this.showError(error, 'Não foi possível salvar o patrimônio.');
     } finally {
       this.isSaving = false;
     }
   }
-  edit(item: InventoryRow): void {
-    this.formKind = item.kind;
+
+  edit(item: InventoryItem): void {
     this.editingId = item.id;
-    this.editingKind = item.kind;
     this.form = {
-      numeroPatrimonio: item.numeroPatrimonio,
+      codigo_patrimonio: item.codigo_patrimonio,
       descricao: item.descricao,
-      responsavel: item.responsavel,
-      localizacao: item.localizacao ?? '',
-      estado: item.estado ?? '',
-      dataNascimento: item.dataNascimento ?? '',
-      dataOrigem: item.dataOrigem ?? '',
-      autor: item.autor ?? '',
+      estado_conservacao: item.estado_conservacao,
+      situacao: item.situacao,
+      data_aquisicao: item.data_aquisicao ?? '',
+      valor: item.valor === null ? null : Number(item.valor),
+      setor: item.setor,
+      tipo_bem: item.tipo_bem,
     };
     this.mensagem = '';
+    this.isError = false;
   }
 
-  async remove(item: InventoryRow): Promise<void> {
-    if (!window.confirm(`Excluir o patrimônio ${item.numeroPatrimonio}?`)) {
+  async remove(item: InventoryItem): Promise<void> {
+    if (!window.confirm(`Excluir o patrimônio ${item.codigo_patrimonio}?`)) {
       return;
     }
 
     this.mensagem = '';
     try {
-      await this.inventoryService.delete(item.kind, item.id);
-      this.items = this.items.filter(
-        (current) => current.kind !== item.kind || current.id !== item.id,
-      );
+      await this.inventoryService.delete(item.id);
+      this.items = this.items.filter((current) => current.id !== item.id);
       this.mensagem = 'Patrimônio excluído.';
       this.isError = false;
     } catch (error) {
@@ -218,7 +180,6 @@ export class InventoryPage implements OnInit {
 
   cancelEdit(): void {
     this.editingId = null;
-    this.editingKind = null;
     this.form = { ...EMPTY_FORM };
   }
 
@@ -235,52 +196,17 @@ export class InventoryPage implements OnInit {
     }
   }
 
-  kindLabel(kind: AssetKind): string {
-    return this.kinds.find((option) => option.value === kind)?.label ?? '';
-  }
-
-  itemDetail(item: InventoryRow): string {
-    if (item.kind === 'semoventes') {
-      return item.dataNascimento ?? '';
-    }
-    if (item.kind === 'imateriais') {
-      return item.dataOrigem ?? '';
-    }
-    return item.localizacao ?? '';
-  }
-
-  itemDetailLabel(item: InventoryRow): string {
-    if (item.kind === 'semoventes' || item.kind === 'imateriais') {
-      return 'Data';
-    }
-    return 'Localização';
-  }
-
-  itemStatus(item: InventoryRow): string {
-    return item.kind === 'imateriais' ? item.autor ?? '' : item.estado ?? '';
-  }
-
-  itemStatusLabel(item: InventoryRow): string {
-    return item.kind === 'imateriais' ? 'Autor' : 'Estado';
-  }
-
-  private toPayload(): InventoryPayload {
-    const payload: InventoryPayload = {
-      numeroPatrimonio: this.form.numeroPatrimonio.trim(),
+  private toPayload(setor: number, tipoBem: number): InventoryPayload {
+    return {
+      codigo_patrimonio: this.form.codigo_patrimonio.trim(),
       descricao: this.form.descricao.trim(),
-      responsavel: this.form.responsavel.trim(),
+      estado_conservacao: this.form.estado_conservacao,
+      situacao: this.form.situacao,
+      data_aquisicao: this.form.data_aquisicao || null,
+      valor: this.form.valor === null ? null : this.form.valor.toFixed(2),
+      setor,
+      tipo_bem: tipoBem,
     };
-    if (this.usesLocationAndCondition) {
-      payload.localizacao = this.form.localizacao.trim();
-      payload.estado = this.form.estado.trim();
-    } else if (this.usesBirthDate) {
-      payload.dataNascimento = this.form.dataNascimento;
-      payload.estado = this.form.estado.trim();
-    } else {
-      payload.dataOrigem = this.form.dataOrigem;
-      payload.autor = this.form.autor.trim();
-    }
-    return payload;
   }
 
   private showError(error: unknown, fallback: string): void {

@@ -1,8 +1,10 @@
 from django.contrib import admin
-from .models import *
 
-# Register your models here.
-admin.site.register(BensMoveis)
-admin.site.register(BensImoveis)
-admin.site.register(BensSemoventes)
-admin.site.register(BensImateriais)
+from .models import Bem, Localizacao, Movimentacao, Setor, TipoBem
+
+
+admin.site.register(Bem)
+admin.site.register(TipoBem)
+admin.site.register(Setor)
+admin.site.register(Localizacao)
+admin.site.register(Movimentacao)

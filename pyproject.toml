@@ -11,7 +11,7 @@ dependencies = [
     "django==6.1",
     "django-allauth[headless]>=65.19.2",
     "djangorestframework>=3.18.0",
-    "psycopg[binary]==3.3",
+    "mysqlclient==2.2.7",
 ]
 
 [project.scripts]

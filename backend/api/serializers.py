@@ -1,6 +1,8 @@
 from django.contrib.auth.models import Group, User
 from rest_framework import serializers
-from .models import *
+
+from .models import Bem, Localizacao, Movimentacao, Setor, TipoBem
+
 
 class UserSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
@@ -13,56 +15,64 @@ class GroupSerializer(serializers.HyperlinkedModelSerializer):
         model = Group
         fields = ["url", "name"]
 
-class BensMoveisSerializer(serializers.HyperlinkedModelSerializer):
-    # id = serializers.IntegerField(read_only=True)
-    # numeroPatrimonio = serializers.CharField(source="codigoPatrimonio")
+
+class TipoBemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TipoBem
+        fields = ["id", "nome", "descricao"]
+
+
+class SetorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Setor
+        fields = ["id", "nome", "descricao"]
+
+
+class LocalizacaoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Localizacao
+        fields = ["id", "nome", "descricao"]
+
+
+class BemSerializer(serializers.ModelSerializer):
+    tipo_bem_nome = serializers.CharField(source="tipo_bem.nome", read_only=True)
+    setor_nome = serializers.CharField(source="setor.nome", read_only=True)
 
     class Meta:
-        model = BensMoveis
-        fields = [ 
-            "url",
+        model = Bem
+        fields = [
             "id",
-            "numeroPatrimonio",
-            "descricao",       
-            "responsavel", 
-            "localizacao", 
-            "estado",
-        ] 
-class BensImoveisSerializer(serializers.HyperlinkedModelSerializer):
-    class Meta:
-        model = BensImoveis
-        fields = [ 
-            "url",
-            "id", 
-            "numeroPatrimonio", 
-            "descricao",       
-            "responsavel", 
-            "localizacao", 
-            "estado",
-        ] 
+            "codigo_patrimonio",
+            "descricao",
+            "estado_conservacao",
+            "situacao",
+            "data_aquisicao",
+            "valor",
+            "setor",
+            "setor_nome",
+            "tipo_bem",
+            "tipo_bem_nome",
+        ]
 
-class BensSemoventesSerializer(serializers.HyperlinkedModelSerializer):
-    class Meta:
-        model = BensSemoventes
-        fields = [ 
-            "url",
-            "id", 
-            "numeroPatrimonio", 
-            "descricao",       
-            "responsavel", 
-            "dataNascimento", 
-            "estado",
-        ] 
 
-class BensImateriaisSerializer(serializers.HyperlinkedModelSerializer):
+class MovimentacaoSerializer(serializers.ModelSerializer):
+    bem_codigo_patrimonio = serializers.CharField(source="bem.codigo_patrimonio", read_only=True)
+    localizacao_origem_nome = serializers.CharField(source="localizacao_origem.nome", read_only=True)
+    localizacao_destino_nome = serializers.CharField(source="localizacao_destino.nome", read_only=True)
+    setor_nome = serializers.CharField(source="setor.nome", read_only=True)
+
     class Meta:
-        model = BensImateriais
-        fields = [ 
-            "url", 
+        model = Movimentacao
+        fields = [
             "id",
-            "numeroPatrimonio", 
-            "descricao",       
-            "responsavel", 
-            "dataOrigem", 
-            "autor",
-        ]         
+            "data_movimentacao",
+            "observacao",
+            "setor",
+            "setor_nome",
+            "localizacao_origem",
+            "localizacao_origem_nome",
+            "localizacao_destino",
+            "localizacao_destino_nome",
+            "bem",
+            "bem_codigo_patrimonio",
+        ]

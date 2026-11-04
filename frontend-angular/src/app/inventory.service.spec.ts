@@ -10,6 +10,20 @@ describe('InventoryService', () => {
   let service: InventoryService;
   let http: HttpTestingController;
 
+  const item = {
+    id: 10,
+    codigo_patrimonio: 'PAT-10',
+    descricao: 'Notebook',
+    estado_conservacao: 'Bom',
+    situacao: 'Ativo',
+    data_aquisicao: null,
+    valor: null,
+    setor: 2,
+    setor_nome: 'Informática',
+    tipo_bem: 1,
+    tipo_bem_nome: 'Equipamento',
+  };
+
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting()],
@@ -20,41 +34,50 @@ describe('InventoryService', () => {
 
   afterEach(() => http.verify());
 
-  it('uses the backend endpoints for list, create, update and delete', async () => {
-    const item = {
-      id: 10,
-      numeroPatrimonio: 'PAT-10',
-      descricao: 'Notebook',
-      responsavel: 'Coordenação',
-      localizacao: 'Sala 1',
-      estado: 'bom',
-    };
+  it('loads the inventory and catalogs from the unified API', async () => {
+    const inventoryRequest = service.list();
+    http.expectOne('/bens/').flush({ results: [item] });
+    await expect(inventoryRequest).resolves.toEqual([item]);
 
-    const listRequest = service.list('moveis');
-    http.expectOne('/bens_moveis/').flush([item]);
-    await expect(listRequest).resolves.toEqual([item]);
+    const typesRequest = service.listTiposBem();
+    http.expectOne('/tipos_bem/').flush([{ id: 1, nome: 'Equipamento', descricao: null }]);
+    await expect(typesRequest).resolves.toEqual([
+      { id: 1, nome: 'Equipamento', descricao: null },
+    ]);
 
+    const sectorsRequest = service.listSetores();
+    http.expectOne('/setores/').flush([{ id: 2, nome: 'Informática', descricao: null }]);
+    await expect(sectorsRequest).resolves.toEqual([
+      { id: 2, nome: 'Informática', descricao: null },
+    ]);
+  });
+
+  it('uses the unified inventory endpoint for create, update and delete', async () => {
     const payload = {
-      numeroPatrimonio: item.numeroPatrimonio,
+      codigo_patrimonio: item.codigo_patrimonio,
       descricao: item.descricao,
-      responsavel: item.responsavel,
-      localizacao: item.localizacao,
-      estado: item.estado,
+      estado_conservacao: item.estado_conservacao,
+      situacao: item.situacao,
+      data_aquisicao: item.data_aquisicao,
+      valor: item.valor,
+      setor: item.setor,
+      tipo_bem: item.tipo_bem,
     };
-    const createRequest = service.create('moveis', payload);
-    const createHttp = http.expectOne('/bens_moveis/');
+
+    const createRequest = service.create(payload);
+    const createHttp = http.expectOne('/bens/');
     expect(createHttp.request.method).toBe('POST');
     createHttp.flush(item);
     await expect(createRequest).resolves.toEqual(item);
 
-    const updateRequest = service.update('moveis', item.id, payload);
-    const updateHttp = http.expectOne('/bens_moveis/10/');
+    const updateRequest = service.update(item.id, payload);
+    const updateHttp = http.expectOne('/bens/10/');
     expect(updateHttp.request.method).toBe('PUT');
     updateHttp.flush(item);
     await expect(updateRequest).resolves.toEqual(item);
 
-    const deleteRequest = service.delete('moveis', item.id);
-    const deleteHttp = http.expectOne('/bens_moveis/10/');
+    const deleteRequest = service.delete(item.id);
+    const deleteHttp = http.expectOne('/bens/10/');
     expect(deleteHttp.request.method).toBe('DELETE');
     deleteHttp.flush(null);
     await expect(deleteRequest).resolves.toBeUndefined();
